@@ -1,6 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { TimeOverride } from './components/TimeOverride';
 import { mockMatches } from './data/mockMatches';
+import { isSupabaseConfigured } from './services/supabaseClient';
+import {
+  fetchSupabaseGameData,
+  saveSupabasePrediction,
+  toggleSupabaseReaction,
+  verifySupabasePlayerPin,
+} from './services/supabaseGameService';
 import type { Match, Prediction, PredictionReaction } from './types';
 import {
   buildLeaderboard,
@@ -53,6 +60,8 @@ function parseOverride(value: string): Date {
 }
 
 function getMatchGroup(match: Match) {
+  if (match.roundName) return match.roundName;
+
   const groups = ['Group A', 'Group B', 'Group C'];
   const index = mockMatches.findIndex((item) => item.id === match.id);
   return groups[index % groups.length];
@@ -101,6 +110,9 @@ function App() {
   );
   const [loginPin, setLoginPin] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [syncError, setSyncError] = useState('');
+  const [matches, setMatches] = useState<Match[]>(mockMatches);
   const [predictions, setPredictions] = useState<Prediction[]>(getPredictions);
   const [reactions, setReactions] = useState<PredictionReaction[]>(getReactions);
   const [timeOverride, setTimeOverrideState] = useState(getTimeOverride);
@@ -109,7 +121,7 @@ function App() {
 
   const effectiveNow = useMemo(() => parseOverride(timeOverride), [timeOverride]);
   const selectedMatch =
-    mockMatches.find((match) => match.id === selectedMatchId) ?? mockMatches[0];
+    matches.find((match) => match.id === selectedMatchId) ?? matches[0];
   const visiblePredictions = useMemo(() => {
     const allowedNicknames = new Set(hardcodedPlayers.map((player) => player.nickname));
     return predictions.filter((prediction) =>
@@ -117,28 +129,65 @@ function App() {
     );
   }, [predictions]);
   const leaderboardRows = useMemo(
-    () => buildLeaderboard(mockMatches, visiblePredictions),
-    [visiblePredictions],
+    () => buildLeaderboard(matches, visiblePredictions),
+    [matches, visiblePredictions],
   );
   const currentUserRank = leaderboardRows.findIndex(
     (row) => row.nickname === currentNickname,
   );
 
-  function handleLogin() {
-    // Later Phase 2: validate this PIN against Supabase instead of hardcoded data.
-    const player = hardcodedPlayers.find(
-      (item) => item.nickname === loginNickname && item.pin === loginPin,
-    );
+  async function loadGameData() {
+    if (!isSupabaseConfigured) return;
 
-    if (!player) {
+    setIsLoadingData(true);
+    setSyncError('');
+    try {
+      const gameData = await fetchSupabaseGameData();
+      if (gameData.matches.length > 0) {
+        setMatches(gameData.matches);
+        setSelectedMatchId((currentId) => currentId || gameData.matches[0].id);
+      }
+      setPredictions(gameData.predictions);
+      setReactions(gameData.reactions);
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : 'Could not load Supabase data.');
+    } finally {
+      setIsLoadingData(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadGameData();
+  }, []);
+
+  async function handleLogin() {
+    let isValidLogin = false;
+
+    if (isSupabaseConfigured) {
+      try {
+        isValidLogin = await verifySupabasePlayerPin(loginNickname, loginPin);
+      } catch (error) {
+        setLoginError(
+          error instanceof Error ? error.message : 'Could not verify this player.',
+        );
+        return;
+      }
+    } else {
+      isValidLogin = hardcodedPlayers.some(
+        (item) => item.nickname === loginNickname && item.pin === loginPin,
+      );
+    }
+
+    if (!isValidLogin) {
       setLoginError('Wrong PIN for this player.');
       return;
     }
 
-    setCurrentUserNickname(player.nickname);
-    setCurrentNickname(player.nickname);
+    setCurrentUserNickname(loginNickname);
+    setCurrentNickname(loginNickname);
     setLoginPin('');
     setLoginError('');
+    void loadGameData();
   }
 
   function handleLogout() {
@@ -149,7 +198,7 @@ function App() {
     setLoginError('');
   }
 
-  function handleSavePrediction(
+  async function handleSavePrediction(
     matchId: string,
     homeScore: number,
     awayScore: number,
@@ -157,7 +206,7 @@ function App() {
   ) {
     if (!currentNickname) return;
 
-    const match = mockMatches.find((item) => item.id === matchId);
+    const match = matches.find((item) => item.id === matchId);
     if (
       !match ||
       effectiveNow >= new Date(match.kickoffTime) ||
@@ -176,7 +225,8 @@ function App() {
       updatedAt: new Date().toISOString(),
     };
 
-    const nextPredictions = getPredictions()
+    const sourcePredictions = isSupabaseConfigured ? predictions : getPredictions();
+    const nextPredictions = sourcePredictions
       .filter(
         (prediction) =>
           prediction.matchId !== matchId || prediction.userNickname !== currentNickname,
@@ -184,7 +234,7 @@ function App() {
       .map((prediction) => {
         if (!isGolden || prediction.userNickname !== currentNickname) return prediction;
 
-        const predictedMatch = mockMatches.find((item) => item.id === prediction.matchId);
+        const predictedMatch = matches.find((item) => item.id === prediction.matchId);
         if (!predictedMatch || getMatchGroup(predictedMatch) !== getMatchGroup(match)) {
           return prediction;
         }
@@ -192,25 +242,48 @@ function App() {
         return { ...prediction, isGolden: false };
       });
 
-    savePredictions([...nextPredictions, savedPrediction]);
-    setPredictions(getPredictions());
+    const optimisticPredictions = [...nextPredictions, savedPrediction];
+    setPredictions(optimisticPredictions);
+
+    if (isSupabaseConfigured) {
+      try {
+        await saveSupabasePrediction(savedPrediction);
+        await loadGameData();
+      } catch (error) {
+        setSyncError(error instanceof Error ? error.message : 'Could not save prediction.');
+      }
+    } else {
+      savePredictions(optimisticPredictions);
+      setPredictions(getPredictions());
+    }
   }
 
-  function handleToggleReaction(
+  async function handleToggleReaction(
     matchId: string,
     predictionUserNickname: string,
     reaction: string,
   ) {
     if (!currentNickname || currentNickname === predictionUserNickname) return;
 
-    toggleReaction({
+    const nextReaction = {
       matchId,
       predictionUserNickname,
       reactorNickname: currentNickname,
       reaction,
       updatedAt: new Date().toISOString(),
-    });
-    setReactions(getReactions());
+    };
+
+    if (isSupabaseConfigured) {
+      try {
+        await toggleSupabaseReaction(nextReaction);
+        await loadGameData();
+      } catch (error) {
+        setSyncError(error instanceof Error ? error.message : 'Could not save reaction.');
+      }
+    } else {
+      toggleReaction(nextReaction);
+      setReactions(getReactions());
+    }
   }
 
   function handleTimeOverrideChange(value: string) {
@@ -269,11 +342,13 @@ function App() {
               loginError={loginError}
               loginNickname={loginNickname}
               loginPin={loginPin}
-              matches={mockMatches}
+              isLoadingData={isLoadingData}
+              matches={matches}
               players={hardcodedPlayers}
               predictions={visiblePredictions}
               reactions={reactions}
               selectedMatch={selectedMatch}
+              syncError={syncError}
               onLogin={handleLogin}
               onLoginNicknameChange={setLoginNickname}
               onLoginPinChange={setLoginPin}
@@ -287,7 +362,7 @@ function App() {
           {currentNickname && activeTab === 'predictions' ? (
             <PredictionsScreen
               currentNickname={currentNickname}
-              matches={mockMatches}
+              matches={matches}
               predictions={visiblePredictions}
               onOpenMatch={openMatch}
             />
@@ -320,6 +395,7 @@ type MatchesScreenProps = {
   currentNickname: string;
   currentUserRank: number;
   effectiveNow: Date;
+  isLoadingData: boolean;
   leaderboardRows: ReturnType<typeof buildLeaderboard>;
   loginError: string;
   loginNickname: string;
@@ -329,6 +405,7 @@ type MatchesScreenProps = {
   predictions: Prediction[];
   reactions: PredictionReaction[];
   selectedMatch: Match;
+  syncError: string;
   onLogin: () => void;
   onLoginNicknameChange: (nickname: string) => void;
   onLoginPinChange: (pin: string) => void;
@@ -351,6 +428,7 @@ function MatchesScreen({
   currentNickname,
   currentUserRank,
   effectiveNow,
+  isLoadingData,
   leaderboardRows,
   loginError,
   loginNickname,
@@ -360,6 +438,7 @@ function MatchesScreen({
   predictions,
   reactions,
   selectedMatch,
+  syncError,
   onLogin,
   onLoginNicknameChange,
   onLoginPinChange,
@@ -376,6 +455,9 @@ function MatchesScreen({
           <h1>{currentNickname ? currentNickname : 'Ready for kickoff?'}</h1>
           <p className="muted">Make your predictions before kickoff.</p>
         </div>
+
+        {isLoadingData ? <p className="sync-note">Syncing Supabase data...</p> : null}
+        {syncError ? <p className="sync-error">{syncError}</p> : null}
 
         <UserCard
           currentNickname={currentNickname}

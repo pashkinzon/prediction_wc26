@@ -12,6 +12,7 @@ export type Match = {
   kickoffTime: string;
   status: MatchStatus;
   finalScore?: TeamScore;
+  roundName?: string;
 };
 
 export type Prediction = {

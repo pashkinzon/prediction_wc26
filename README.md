@@ -67,12 +67,21 @@ src/utils/storage.ts localStorage helpers
 
 ## Future Phase 2: Supabase plan
 
-Do not add authentication yet for the MVP. Later, Supabase can provide shared storage:
+Supabase can provide shared storage:
 
-- `users`: nickname plus simple private PIN/code hash
+- `players`: nickname plus simple private PIN/code hash
 - `matches`: normalized fixture data
 - `predictions`: user, match, home score, away score, timestamps
 - Leaderboard can be calculated either in app code from stored predictions or with a Supabase view/RPC.
+
+The app reads Supabase config from Vite environment variables:
+
+```text
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_publishable_key
+```
+
+For this project, run `supabase-setup.sql` once in the Supabase SQL editor after creating the base tables. It adds local MVP policies and seeds the mock matches.
 
 Suggested schema notes:
 
