@@ -67,6 +67,25 @@ function getMatchGroup(match: Match) {
   return groups[index % groups.length];
 }
 
+function isMatchOpenForPrediction(match: Match, effectiveNow: Date) {
+  return match.status === 'scheduled' && effectiveNow < new Date(match.kickoffTime);
+}
+
+function sortMatchesByKickoff(matches: Match[]) {
+  return [...matches].sort(
+    (a, b) => new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime(),
+  );
+}
+
+function getPreferredSelectedMatch(matches: Match[], effectiveNow: Date) {
+  const sortedMatches = sortMatchesByKickoff(matches);
+  return (
+    sortedMatches.find((match) => isMatchOpenForPrediction(match, effectiveNow)) ??
+    sortedMatches.find((match) => match.status === 'live') ??
+    sortedMatches[0]
+  );
+}
+
 function formatKickoff(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     day: '2-digit',
@@ -145,7 +164,13 @@ function App() {
       const gameData = await fetchSupabaseGameData();
       if (gameData.matches.length > 0) {
         setMatches(gameData.matches);
-        setSelectedMatchId((currentId) => currentId || gameData.matches[0].id);
+        setSelectedMatchId((currentId) => {
+          if (currentId && gameData.matches.some((match) => match.id === currentId)) {
+            return currentId;
+          }
+
+          return getPreferredSelectedMatch(gameData.matches, effectiveNow)?.id ?? '';
+        });
       }
       setPredictions(gameData.predictions);
       setReactions(gameData.reactions);
@@ -339,19 +364,12 @@ function App() {
               currentUserRank={currentUserRank}
               effectiveNow={effectiveNow}
               leaderboardRows={leaderboardRows}
-              loginError={loginError}
-              loginNickname={loginNickname}
-              loginPin={loginPin}
               isLoadingData={isLoadingData}
               matches={matches}
-              players={hardcodedPlayers}
               predictions={visiblePredictions}
               reactions={reactions}
               selectedMatch={selectedMatch}
               syncError={syncError}
-              onLogin={handleLogin}
-              onLoginNicknameChange={setLoginNickname}
-              onLoginPinChange={setLoginPin}
               onLogout={handleLogout}
               onOpenMatch={openMatch}
               onSavePrediction={handleSavePrediction}
@@ -397,18 +415,11 @@ type MatchesScreenProps = {
   effectiveNow: Date;
   isLoadingData: boolean;
   leaderboardRows: ReturnType<typeof buildLeaderboard>;
-  loginError: string;
-  loginNickname: string;
-  loginPin: string;
   matches: Match[];
-  players: typeof hardcodedPlayers;
   predictions: Prediction[];
   reactions: PredictionReaction[];
   selectedMatch: Match;
   syncError: string;
-  onLogin: () => void;
-  onLoginNicknameChange: (nickname: string) => void;
-  onLoginPinChange: (pin: string) => void;
   onLogout: () => void;
   onOpenMatch: (matchId: string) => void;
   onSavePrediction: (
@@ -430,23 +441,23 @@ function MatchesScreen({
   effectiveNow,
   isLoadingData,
   leaderboardRows,
-  loginError,
-  loginNickname,
-  loginPin,
   matches,
-  players,
   predictions,
   reactions,
   selectedMatch,
   syncError,
-  onLogin,
-  onLoginNicknameChange,
-  onLoginPinChange,
   onLogout,
   onOpenMatch,
   onSavePrediction,
   onToggleReaction,
 }: MatchesScreenProps) {
+  const upcomingMatches = sortMatchesByKickoff(
+    matches.filter((match) => isMatchOpenForPrediction(match, effectiveNow)),
+  );
+  const activeAndResultMatches = sortMatchesByKickoff(
+    matches.filter((match) => !isMatchOpenForPrediction(match, effectiveNow)),
+  );
+
   return (
     <div className="matches-layout">
       <section className="home-screen">
@@ -461,34 +472,28 @@ function MatchesScreen({
 
         <UserCard
           currentNickname={currentNickname}
-          error={loginError}
-          loginNickname={loginNickname}
-          loginPin={loginPin}
-          players={players}
-          onLogin={onLogin}
-          onLoginNicknameChange={onLoginNicknameChange}
-          onLoginPinChange={onLoginPinChange}
           onLogout={onLogout}
         />
 
-        <div className="section-title">
-          <div>
-            <h2>Upcoming Matches</h2>
-            <p className="muted">Tap predict to open match details.</p>
-          </div>
-        </div>
+        <MatchListSection
+          emptyText="No upcoming matches open for prediction."
+          effectiveNow={effectiveNow}
+          matches={upcomingMatches}
+          selectedMatch={selectedMatch}
+          title="Upcoming Matches"
+          subtitle="Tap predict to open match details."
+          onOpenMatch={onOpenMatch}
+        />
 
-        <div className="match-list">
-          {matches.map((match) => (
-            <CompactMatchCard
-              key={match.id}
-              effectiveNow={effectiveNow}
-              isSelected={match.id === selectedMatch.id}
-              match={match}
-              onOpenMatch={onOpenMatch}
-            />
-          ))}
-        </div>
+        <MatchListSection
+          emptyText="No live or finished matches yet."
+          effectiveNow={effectiveNow}
+          matches={activeAndResultMatches}
+          selectedMatch={selectedMatch}
+          title="Live & Results"
+          subtitle="Predictions are visible after kickoff."
+          onOpenMatch={onOpenMatch}
+        />
 
         <LeaderboardPreview rows={leaderboardRows} />
       </section>
@@ -547,23 +552,9 @@ function LoginScreen({
 
 function UserCard({
   currentNickname,
-  error,
-  loginNickname,
-  loginPin,
-  players,
-  onLogin,
-  onLoginNicknameChange,
-  onLoginPinChange,
   onLogout,
 }: {
   currentNickname: string;
-  error: string;
-  loginNickname: string;
-  loginPin: string;
-  players: typeof hardcodedPlayers;
-  onLogin: () => void;
-  onLoginNicknameChange: (nickname: string) => void;
-  onLoginPinChange: (pin: string) => void;
   onLogout: () => void;
 }) {
   return (
@@ -578,16 +569,50 @@ function UserCard({
       <button className="secondary-button" type="button" onClick={onLogout}>
         Log out
       </button>
-      <PlayerPinForm
-        buttonLabel="Switch"
-        error={error}
-        loginNickname={loginNickname}
-        loginPin={loginPin}
-        players={players}
-        onLogin={onLogin}
-        onLoginNicknameChange={onLoginNicknameChange}
-        onLoginPinChange={onLoginPinChange}
-      />
+    </section>
+  );
+}
+
+function MatchListSection({
+  effectiveNow,
+  emptyText,
+  matches,
+  selectedMatch,
+  subtitle,
+  title,
+  onOpenMatch,
+}: {
+  effectiveNow: Date;
+  emptyText: string;
+  matches: Match[];
+  selectedMatch: Match;
+  subtitle: string;
+  title: string;
+  onOpenMatch: (matchId: string) => void;
+}) {
+  return (
+    <section className="match-section">
+      <div className="section-title">
+        <div>
+          <h2>{title}</h2>
+          <p className="muted">{subtitle}</p>
+        </div>
+      </div>
+      {matches.length > 0 ? (
+        <div className="match-list">
+          {matches.map((match) => (
+            <CompactMatchCard
+              key={match.id}
+              effectiveNow={effectiveNow}
+              isSelected={match.id === selectedMatch.id}
+              match={match}
+              onOpenMatch={onOpenMatch}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="empty-state">{emptyText}</p>
+      )}
     </section>
   );
 }

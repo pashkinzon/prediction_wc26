@@ -204,7 +204,7 @@ label {
 
 .user-card {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   gap: 0.75rem;
   align-items: center;
   border: 1px solid #e2e8e4;
@@ -212,6 +212,29 @@ label {
   background: #fff;
   padding: 0.85rem;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.match-section {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.sync-note,
+.sync-error {
+  border-radius: 14px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  padding: 0.72rem 0.85rem;
+}
+
+.sync-note {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.sync-error {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .user-avatar,
