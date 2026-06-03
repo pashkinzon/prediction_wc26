@@ -124,4 +124,98 @@ Use football-data.org through a backend/server route, not directly from the fron
 - Never expose the API key in browser code.
 - Fetch real fixtures/results from the backend, then update Supabase `matches`.
 
-For Render, this can become either a small Node backend plus Vite frontend or a static frontend calling a secure API service.
+The first backend/proxy version lives in `server/`. It fetches World Cup matches from football-data.org, normalizes them to the existing Supabase `matches` table, and upserts them with the Supabase service role key.
+
+### Run the sync server locally
+
+Create a local `.env.local` or export these values in your shell. Do not commit secret values.
+
+```text
+FOOTBALL_DATA_API_KEY=your_football_data_token
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+SYNC_ADMIN_TOKEN=any-long-random-private-token
+```
+
+Then run:
+
+```bash
+npm run server
+```
+
+Health check:
+
+```bash
+curl http://localhost:3001/health
+```
+
+Manual sync:
+
+```bash
+curl -X POST http://localhost:3001/sync/world-cup \
+  -H "X-Sync-Token: your-long-random-private-token"
+```
+
+The response includes safe football-data.org throttle headers:
+
+```text
+X-API-Version
+X-Authenticated-Client
+X-RequestCounter-Reset
+X-RequestsAvailable
+```
+
+Use those values to avoid hitting the football-data.org rate limiter.
+
+### Deploy the sync server on Render
+
+Keep the existing Vite app as a Render Static Site. Create a second Render service for the backend:
+
+1. Click **New** -> **Web Service**.
+2. Choose the same GitHub repo.
+3. Use branch `main`.
+4. Leave **Root Directory** empty.
+5. Set **Build Command** to `npm install`.
+6. Set **Start Command** to `npm run server`.
+7. Add these backend-only environment variables:
+
+```text
+FOOTBALL_DATA_API_KEY
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+SYNC_ADMIN_TOKEN
+```
+
+Do not add football-data.org or Supabase secret/service-role keys to the Static Site or any `VITE_*` variable.
+
+After Render deploys the Web Service, test:
+
+```bash
+curl https://your-render-web-service.onrender.com/health
+```
+
+Then run one manual sync:
+
+```bash
+curl -X POST https://your-render-web-service.onrender.com/sync/world-cup \
+  -H "X-Sync-Token: your-sync-admin-token"
+```
+
+The frontend should keep reading matches from Supabase. The backend is only for updating the Supabase `matches` table.
+
+### Schema notes
+
+No schema change is required for the first football-data.org sync. The server writes the existing columns:
+
+```text
+id
+home_team
+away_team
+kickoff_time
+status
+final_home_score
+final_away_score
+round_name
+```
+
+football-data.org match ids are stored as `fd-{id}`. Existing mock rows are not deleted automatically, so you can verify the real sync before cleaning up test data.
