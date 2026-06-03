@@ -33,6 +33,8 @@ const hardcodedPlayers = [
   { nickname: 'Fedor', pin: '1708' },
 ];
 
+const allRoundsFilter = 'All rounds';
+
 function getStoredHardcodedPlayer() {
   const storedNickname = getCurrentUserNickname();
   return hardcodedPlayers.some((player) => player.nickname === storedNickname)
@@ -41,18 +43,59 @@ function getStoredHardcodedPlayer() {
 }
 
 const teamMeta: Record<string, { flag: string; shortName: string }> = {
+  Algeria: { flag: '🇩🇿', shortName: 'Algeria' },
   Argentina: { flag: '🇦🇷', shortName: 'Argentina' },
+  Australia: { flag: '🇦🇺', shortName: 'Australia' },
+  Austria: { flag: '🇦🇹', shortName: 'Austria' },
+  Belgium: { flag: '🇧🇪', shortName: 'Belgium' },
+  'Bosnia-H.': { flag: '🇧🇦', shortName: 'Bosnia-H.' },
+  'Bosnia and Herzegovina': { flag: '🇧🇦', shortName: 'Bosnia-H.' },
   Brazil: { flag: '🇧🇷', shortName: 'Brazil' },
   Canada: { flag: '🇨🇦', shortName: 'Canada' },
+  'Cape Verde': { flag: '🇨🇻', shortName: 'Cape Verde' },
+  Colombia: { flag: '🇨🇴', shortName: 'Colombia' },
+  'Congo DR': { flag: '🇨🇩', shortName: 'Congo DR' },
+  Croatia: { flag: '🇭🇷', shortName: 'Croatia' },
+  Curaçao: { flag: '🇨🇼', shortName: 'Curaçao' },
+  Curacao: { flag: '🇨🇼', shortName: 'Curaçao' },
+  Czechia: { flag: '🇨🇿', shortName: 'Czechia' },
+  Ecuador: { flag: '🇪🇨', shortName: 'Ecuador' },
+  Egypt: { flag: '🇪🇬', shortName: 'Egypt' },
+  England: { flag: 'ENG', shortName: 'England' },
   France: { flag: '🇫🇷', shortName: 'France' },
   Germany: { flag: '🇩🇪', shortName: 'Germany' },
   Ghana: { flag: '🇬🇭', shortName: 'Ghana' },
+  Haiti: { flag: '🇭🇹', shortName: 'Haiti' },
+  Iran: { flag: '🇮🇷', shortName: 'Iran' },
+  Iraq: { flag: '🇮🇶', shortName: 'Iraq' },
+  'Ivory Coast': { flag: '🇨🇮', shortName: 'Ivory Coast' },
   Japan: { flag: '🇯🇵', shortName: 'Japan' },
+  Jordan: { flag: '🇯🇴', shortName: 'Jordan' },
+  'Korea Republic': { flag: '🇰🇷', shortName: 'South Korea' },
+  'South Korea': { flag: '🇰🇷', shortName: 'South Korea' },
   Mexico: { flag: '🇲🇽', shortName: 'Mexico' },
   Morocco: { flag: '🇲🇦', shortName: 'Morocco' },
+  Netherlands: { flag: '🇳🇱', shortName: 'Netherlands' },
+  'New Zealand': { flag: '🇳🇿', shortName: 'New Zealand' },
+  Norway: { flag: '🇳🇴', shortName: 'Norway' },
+  Panama: { flag: '🇵🇦', shortName: 'Panama' },
+  Paraguay: { flag: '🇵🇾', shortName: 'Paraguay' },
   Portugal: { flag: '🇵🇹', shortName: 'Portugal' },
+  Qatar: { flag: '🇶🇦', shortName: 'Qatar' },
+  'Saudi Arabia': { flag: '🇸🇦', shortName: 'Saudi Arabia' },
+  Scotland: { flag: 'SCO', shortName: 'Scotland' },
+  Senegal: { flag: '🇸🇳', shortName: 'Senegal' },
+  'South Africa': { flag: '🇿🇦', shortName: 'South Africa' },
   Spain: { flag: '🇪🇸', shortName: 'Spain' },
+  Sweden: { flag: '🇸🇪', shortName: 'Sweden' },
+  Switzerland: { flag: '🇨🇭', shortName: 'Switzerland' },
+  TBD: { flag: '🌐', shortName: 'TBD' },
+  Tunisia: { flag: '🇹🇳', shortName: 'Tunisia' },
+  Turkey: { flag: '🇹🇷', shortName: 'Turkey' },
+  USA: { flag: '🇺🇸', shortName: 'USA' },
+  Uruguay: { flag: '🇺🇾', shortName: 'Uruguay' },
   'United States': { flag: '🇺🇸', shortName: 'USA' },
+  Uzbekistan: { flag: '🇺🇿', shortName: 'Uzbekistan' },
 };
 
 function parseOverride(value: string): Date {
@@ -75,6 +118,43 @@ function sortMatchesByKickoff(matches: Match[]) {
   return [...matches].sort(
     (a, b) => new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime(),
   );
+}
+
+function getMatchDateLabel(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+  }).format(new Date(value));
+}
+
+function getRoundSortValue(roundName: string) {
+  const groupMatch = roundName.match(/^Group ([A-Z])$/);
+  if (groupMatch) return `0-${groupMatch[1]}`;
+  if (roundName === 'World Cup') return '9-World Cup';
+  return `5-${roundName}`;
+}
+
+function getAvailableRounds(matches: Match[]) {
+  return [...new Set(matches.map(getMatchGroup))].sort((a, b) =>
+    getRoundSortValue(a).localeCompare(getRoundSortValue(b)),
+  );
+}
+
+function matchesSearch(match: Match, query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return true;
+
+  return [
+    match.homeTeam,
+    match.awayTeam,
+    getTeamMeta(match.homeTeam).shortName,
+    getTeamMeta(match.awayTeam).shortName,
+    getMatchGroup(match),
+  ]
+    .join(' ')
+    .toLowerCase()
+    .includes(normalizedQuery);
 }
 
 function getPreferredSelectedMatch(matches: Match[], effectiveNow: Date) {
@@ -106,15 +186,16 @@ function formatKickoffFull(value: string) {
 }
 
 function getTeamMeta(team: string) {
-  return teamMeta[team] ?? { flag: '🏳️', shortName: team };
+  return teamMeta[team] ?? { flag: '🌐', shortName: team };
 }
 
 function TeamBadge({ team, align = 'center' }: { team: string; align?: 'left' | 'center' | 'right' }) {
   const meta = getTeamMeta(team);
+  const isTextFlag = meta.flag.length > 2;
 
   return (
     <div className={`team-badge team-badge-${align}`}>
-      <span className="flag-tile" aria-hidden="true">
+      <span className={isTextFlag ? 'flag-tile flag-tile-text' : 'flag-tile'} aria-hidden="true">
         {meta.flag}
       </span>
       <strong>{meta.shortName}</strong>
@@ -451,12 +532,27 @@ function MatchesScreen({
   onSavePrediction,
   onToggleReaction,
 }: MatchesScreenProps) {
+  const [matchSearchQuery, setMatchSearchQuery] = useState('');
+  const [roundFilter, setRoundFilter] = useState(allRoundsFilter);
+  const availableRounds = useMemo(() => getAvailableRounds(matches), [matches]);
+  const filteredMatches = useMemo(
+    () =>
+      matches.filter(
+        (match) =>
+          (roundFilter === allRoundsFilter || getMatchGroup(match) === roundFilter) &&
+          matchesSearch(match, matchSearchQuery),
+      ),
+    [matches, matchSearchQuery, roundFilter],
+  );
   const upcomingMatches = sortMatchesByKickoff(
-    matches.filter((match) => isMatchOpenForPrediction(match, effectiveNow)),
+    filteredMatches.filter((match) => isMatchOpenForPrediction(match, effectiveNow)),
   );
   const activeAndResultMatches = sortMatchesByKickoff(
-    matches.filter((match) => !isMatchOpenForPrediction(match, effectiveNow)),
+    filteredMatches.filter((match) => !isMatchOpenForPrediction(match, effectiveNow)),
   );
+  const openCount = matches.filter((match) => isMatchOpenForPrediction(match, effectiveNow)).length;
+  const liveCount = matches.filter((match) => match.status === 'live').length;
+  const finishedCount = matches.filter((match) => match.status === 'finished').length;
 
   return (
     <div className="matches-layout">
@@ -475,8 +571,20 @@ function MatchesScreen({
           onLogout={onLogout}
         />
 
+        <MatchBrowserControls
+          availableRounds={availableRounds}
+          finishedCount={finishedCount}
+          liveCount={liveCount}
+          matchSearchQuery={matchSearchQuery}
+          openCount={openCount}
+          roundFilter={roundFilter}
+          totalCount={matches.length}
+          onRoundFilterChange={setRoundFilter}
+          onSearchChange={setMatchSearchQuery}
+        />
+
         <MatchListSection
-          emptyText="No upcoming matches open for prediction."
+          emptyText="No upcoming matches match your filters."
           effectiveNow={effectiveNow}
           matches={upcomingMatches}
           selectedMatch={selectedMatch}
@@ -486,7 +594,7 @@ function MatchesScreen({
         />
 
         <MatchListSection
-          emptyText="No live or finished matches yet."
+          emptyText="No live or finished matches match your filters."
           effectiveNow={effectiveNow}
           matches={activeAndResultMatches}
           selectedMatch={selectedMatch}
@@ -573,6 +681,74 @@ function UserCard({
   );
 }
 
+function MatchBrowserControls({
+  availableRounds,
+  finishedCount,
+  liveCount,
+  matchSearchQuery,
+  openCount,
+  roundFilter,
+  totalCount,
+  onRoundFilterChange,
+  onSearchChange,
+}: {
+  availableRounds: string[];
+  finishedCount: number;
+  liveCount: number;
+  matchSearchQuery: string;
+  openCount: number;
+  roundFilter: string;
+  totalCount: number;
+  onRoundFilterChange: (round: string) => void;
+  onSearchChange: (query: string) => void;
+}) {
+  return (
+    <section className="match-browser">
+      <div className="match-stats" aria-label="Match overview">
+        <span>
+          <strong>{totalCount}</strong>
+          matches
+        </span>
+        <span>
+          <strong>{openCount}</strong>
+          open
+        </span>
+        <span>
+          <strong>{liveCount}</strong>
+          live
+        </span>
+        <span>
+          <strong>{finishedCount}</strong>
+          done
+        </span>
+      </div>
+
+      <label className="search-field">
+        Search teams
+        <input
+          placeholder="Mexico, Group A, USA..."
+          type="search"
+          value={matchSearchQuery}
+          onChange={(event) => onSearchChange(event.target.value)}
+        />
+      </label>
+
+      <div className="round-filter" aria-label="Round filter">
+        {[allRoundsFilter, ...availableRounds].map((round) => (
+          <button
+            className={roundFilter === round ? 'active' : ''}
+            key={round}
+            type="button"
+            onClick={() => onRoundFilterChange(round)}
+          >
+            {round}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function MatchListSection({
   effectiveNow,
   emptyText,
@@ -600,15 +776,26 @@ function MatchListSection({
       </div>
       {matches.length > 0 ? (
         <div className="match-list">
-          {matches.map((match) => (
-            <CompactMatchCard
-              key={match.id}
-              effectiveNow={effectiveNow}
-              isSelected={match.id === selectedMatch.id}
-              match={match}
-              onOpenMatch={onOpenMatch}
-            />
-          ))}
+          {matches.map((match, index) => {
+            const previousMatch = matches[index - 1];
+            const dateLabel = getMatchDateLabel(match.kickoffTime);
+            const previousDateLabel = previousMatch
+              ? getMatchDateLabel(previousMatch.kickoffTime)
+              : '';
+            const shouldShowDate = dateLabel !== previousDateLabel;
+
+            return (
+              <div className="match-list-item" key={match.id}>
+                {shouldShowDate ? <p className="date-separator">{dateLabel}</p> : null}
+                <CompactMatchCard
+                  effectiveNow={effectiveNow}
+                  isSelected={match.id === selectedMatch.id}
+                  match={match}
+                  onOpenMatch={onOpenMatch}
+                />
+              </div>
+            );
+          })}
         </div>
       ) : (
         <p className="empty-state">{emptyText}</p>
@@ -692,14 +879,24 @@ function CompactMatchCard({
   const kickoff = new Date(match.kickoffTime);
   const isLocked =
     effectiveNow >= kickoff || match.status === 'live' || match.status === 'finished';
+  const statusLabel = match.status === 'finished' ? 'Result' : match.status;
 
   return (
     <article className={`compact-match ${isSelected ? 'compact-match-active' : ''}`}>
       <TeamBadge team={match.homeTeam} />
       <div className="compact-center">
         <span>{getMatchGroup(match)}</span>
-        <strong>vs</strong>
+        {match.finalScore ? (
+          <strong>
+            {match.finalScore.home} - {match.finalScore.away}
+          </strong>
+        ) : (
+          <strong>vs</strong>
+        )}
         <time dateTime={match.kickoffTime}>{formatKickoff(match.kickoffTime)}</time>
+        {match.status !== 'scheduled' ? (
+          <em className={`match-status match-status-${match.status}`}>{statusLabel}</em>
+        ) : null}
         <button type="button" onClick={() => onOpenMatch(match.id)}>
           {isLocked ? 'View' : 'Predict'}
         </button>

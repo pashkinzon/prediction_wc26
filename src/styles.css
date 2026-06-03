@@ -219,6 +219,78 @@ label {
   gap: 0.7rem;
 }
 
+.match-browser {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid #e2e8e4;
+  border-radius: 18px;
+  background: #fff;
+  padding: 0.85rem;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.match-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.match-stats span {
+  display: grid;
+  gap: 0.05rem;
+  border-radius: 12px;
+  background: #f6faf7;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 0.58rem 0.5rem;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.match-stats strong {
+  color: #111827;
+  font-size: 1rem;
+}
+
+.search-field {
+  color: #475569;
+}
+
+.search-field input {
+  padding-left: 0.9rem;
+}
+
+.round-filter {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding-bottom: 0.08rem;
+  scrollbar-width: none;
+}
+
+.round-filter::-webkit-scrollbar {
+  display: none;
+}
+
+.round-filter button {
+  flex: 0 0 auto;
+  border: 1px solid #dfe7e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 900;
+  padding: 0.42rem 0.72rem;
+}
+
+.round-filter .active {
+  border-color: rgba(22, 163, 74, 0.45);
+  background: #eafaf0;
+  color: #148b42;
+}
+
 .sync-note,
 .sync-error {
   border-radius: 14px;
@@ -342,6 +414,23 @@ label {
   gap: 0.8rem;
 }
 
+.match-list-item {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.date-separator {
+  display: inline-flex;
+  width: fit-content;
+  border-radius: 999px;
+  background: #eef4f0;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 0.3rem 0.62rem;
+  text-transform: uppercase;
+}
+
 .compact-match {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(6.5rem, auto) minmax(0, 1fr);
@@ -394,6 +483,13 @@ label {
   font-size: 1.55rem;
 }
 
+.flag-tile-text {
+  color: #334155;
+  font-size: 0.74rem;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
 .compact-center {
   display: grid;
   justify-items: center;
@@ -417,6 +513,28 @@ label {
   color: #475569;
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.compact-center em {
+  font-style: normal;
+}
+
+.match-status {
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 900;
+  padding: 0.18rem 0.48rem;
+  text-transform: uppercase;
+}
+
+.match-status-live {
+  background: #dcfce7;
+  color: #148b42;
+}
+
+.match-status-finished {
+  background: #e2e8f0;
+  color: #334155;
 }
 
 .compact-center button {
@@ -1076,6 +1194,14 @@ label {
   .compact-match {
     grid-template-columns: minmax(0, 1fr) minmax(5.75rem, auto) minmax(0, 1fr);
     padding: 0.75rem;
+  }
+
+  .match-browser {
+    padding: 0.75rem;
+  }
+
+  .match-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .flag-tile {
