@@ -1,0 +1,16 @@
+name: Sync World Cup Matches
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync matches from football-data.org
+        run: |
+          curl --fail --show-error --silent \
+            -X POST https://prediction-wc26-cocz.onrender.com/sync/world-cup \
+            -H "X-Sync-Token: ${{ secrets.SYNC_ADMIN_TOKEN }}"
