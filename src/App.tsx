@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Flag } from './components/Flag';
 import { TimeOverride } from './components/TimeOverride';
 import { mockMatches } from './data/mockMatches';
 import { isSupabaseConfigured } from './services/supabaseClient';
@@ -35,6 +36,17 @@ const hardcodedPlayers = [
 
 const allRoundsFilter = 'All rounds';
 
+const tournamentRounds = [
+  { label: 'Round 1 / Live', detail: 'Live', matchRounds: ['Group A', 'Group B', 'Group C', 'Group D'] },
+  { label: 'Round 2', detail: '04D : 20H : 25M', matchRounds: ['Group E', 'Group F', 'Group G', 'Group H'] },
+  { label: 'Round 3', detail: '08D : 22H : 05M', matchRounds: ['Group I', 'Group J', 'Group K', 'Group L'] },
+  { label: 'Round of 32', detail: '12D : 22H : 05M', matchRounds: ['Last 32'] },
+  { label: 'Round of 16', detail: '12D : 20H : 05M', matchRounds: ['Last 16'] },
+  { label: 'Quarter-Finals', detail: '24D : 22H : 05M', matchRounds: ['Quarter Finals'] },
+  { label: 'Semi-Finals', detail: '28D : 22H : 05M', matchRounds: ['Semi Finals', 'Third Place'] },
+  { label: 'Final', detail: '34D : 20H', matchRounds: ['Final'] },
+];
+
 function getStoredHardcodedPlayer() {
   const storedNickname = getCurrentUserNickname();
   return hardcodedPlayers.some((player) => player.nickname === storedNickname)
@@ -42,60 +54,60 @@ function getStoredHardcodedPlayer() {
     : '';
 }
 
-const teamMeta: Record<string, { flag: string; shortName: string }> = {
-  Algeria: { flag: '🇩🇿', shortName: 'Algeria' },
-  Argentina: { flag: '🇦🇷', shortName: 'Argentina' },
-  Australia: { flag: '🇦🇺', shortName: 'Australia' },
-  Austria: { flag: '🇦🇹', shortName: 'Austria' },
-  Belgium: { flag: '🇧🇪', shortName: 'Belgium' },
-  'Bosnia-H.': { flag: '🇧🇦', shortName: 'Bosnia-H.' },
-  'Bosnia and Herzegovina': { flag: '🇧🇦', shortName: 'Bosnia-H.' },
-  Brazil: { flag: '🇧🇷', shortName: 'Brazil' },
-  Canada: { flag: '🇨🇦', shortName: 'Canada' },
-  'Cape Verde': { flag: '🇨🇻', shortName: 'Cape Verde' },
-  Colombia: { flag: '🇨🇴', shortName: 'Colombia' },
-  'Congo DR': { flag: '🇨🇩', shortName: 'Congo DR' },
-  Croatia: { flag: '🇭🇷', shortName: 'Croatia' },
-  Curaçao: { flag: '🇨🇼', shortName: 'Curaçao' },
-  Curacao: { flag: '🇨🇼', shortName: 'Curaçao' },
-  Czechia: { flag: '🇨🇿', shortName: 'Czechia' },
-  Ecuador: { flag: '🇪🇨', shortName: 'Ecuador' },
-  Egypt: { flag: '🇪🇬', shortName: 'Egypt' },
-  England: { flag: 'ENG', shortName: 'England' },
-  France: { flag: '🇫🇷', shortName: 'France' },
-  Germany: { flag: '🇩🇪', shortName: 'Germany' },
-  Ghana: { flag: '🇬🇭', shortName: 'Ghana' },
-  Haiti: { flag: '🇭🇹', shortName: 'Haiti' },
-  Iran: { flag: '🇮🇷', shortName: 'Iran' },
-  Iraq: { flag: '🇮🇶', shortName: 'Iraq' },
-  'Ivory Coast': { flag: '🇨🇮', shortName: 'Ivory Coast' },
-  Japan: { flag: '🇯🇵', shortName: 'Japan' },
-  Jordan: { flag: '🇯🇴', shortName: 'Jordan' },
-  'Korea Republic': { flag: '🇰🇷', shortName: 'South Korea' },
-  'South Korea': { flag: '🇰🇷', shortName: 'South Korea' },
-  Mexico: { flag: '🇲🇽', shortName: 'Mexico' },
-  Morocco: { flag: '🇲🇦', shortName: 'Morocco' },
-  Netherlands: { flag: '🇳🇱', shortName: 'Netherlands' },
-  'New Zealand': { flag: '🇳🇿', shortName: 'New Zealand' },
-  Norway: { flag: '🇳🇴', shortName: 'Norway' },
-  Panama: { flag: '🇵🇦', shortName: 'Panama' },
-  Paraguay: { flag: '🇵🇾', shortName: 'Paraguay' },
-  Portugal: { flag: '🇵🇹', shortName: 'Portugal' },
-  Qatar: { flag: '🇶🇦', shortName: 'Qatar' },
-  'Saudi Arabia': { flag: '🇸🇦', shortName: 'Saudi Arabia' },
-  Scotland: { flag: 'SCO', shortName: 'Scotland' },
-  Senegal: { flag: '🇸🇳', shortName: 'Senegal' },
-  'South Africa': { flag: '🇿🇦', shortName: 'South Africa' },
-  Spain: { flag: '🇪🇸', shortName: 'Spain' },
-  Sweden: { flag: '🇸🇪', shortName: 'Sweden' },
-  Switzerland: { flag: '🇨🇭', shortName: 'Switzerland' },
-  TBD: { flag: '🌐', shortName: 'TBD' },
-  Tunisia: { flag: '🇹🇳', shortName: 'Tunisia' },
-  Turkey: { flag: '🇹🇷', shortName: 'Turkey' },
-  USA: { flag: '🇺🇸', shortName: 'USA' },
-  Uruguay: { flag: '🇺🇾', shortName: 'Uruguay' },
-  'United States': { flag: '🇺🇸', shortName: 'USA' },
-  Uzbekistan: { flag: '🇺🇿', shortName: 'Uzbekistan' },
+const teamMeta: Record<string, { countryCode?: string; shortName: string }> = {
+  Algeria: { countryCode: 'dz', shortName: 'Algeria' },
+  Argentina: { countryCode: 'ar', shortName: 'Argentina' },
+  Australia: { countryCode: 'au', shortName: 'Australia' },
+  Austria: { countryCode: 'at', shortName: 'Austria' },
+  Belgium: { countryCode: 'be', shortName: 'Belgium' },
+  'Bosnia-H.': { countryCode: 'ba', shortName: 'Bosnia-H.' },
+  'Bosnia and Herzegovina': { countryCode: 'ba', shortName: 'Bosnia-H.' },
+  Brazil: { countryCode: 'br', shortName: 'Brazil' },
+  Canada: { countryCode: 'ca', shortName: 'Canada' },
+  'Cape Verde': { countryCode: 'cv', shortName: 'Cape Verde' },
+  Colombia: { countryCode: 'co', shortName: 'Colombia' },
+  'Congo DR': { countryCode: 'cd', shortName: 'Congo DR' },
+  Croatia: { countryCode: 'hr', shortName: 'Croatia' },
+  Curaçao: { countryCode: 'cw', shortName: 'Curaçao' },
+  Curacao: { countryCode: 'cw', shortName: 'Curaçao' },
+  Czechia: { countryCode: 'cz', shortName: 'Czechia' },
+  Ecuador: { countryCode: 'ec', shortName: 'Ecuador' },
+  Egypt: { countryCode: 'eg', shortName: 'Egypt' },
+  England: { countryCode: 'gb-eng', shortName: 'England' },
+  France: { countryCode: 'fr', shortName: 'France' },
+  Germany: { countryCode: 'de', shortName: 'Germany' },
+  Ghana: { countryCode: 'gh', shortName: 'Ghana' },
+  Haiti: { countryCode: 'ht', shortName: 'Haiti' },
+  Iran: { countryCode: 'ir', shortName: 'Iran' },
+  Iraq: { countryCode: 'iq', shortName: 'Iraq' },
+  'Ivory Coast': { countryCode: 'ci', shortName: 'Ivory Coast' },
+  Japan: { countryCode: 'jp', shortName: 'Japan' },
+  Jordan: { countryCode: 'jo', shortName: 'Jordan' },
+  'Korea Republic': { countryCode: 'kr', shortName: 'South Korea' },
+  'South Korea': { countryCode: 'kr', shortName: 'South Korea' },
+  Mexico: { countryCode: 'mx', shortName: 'Mexico' },
+  Morocco: { countryCode: 'ma', shortName: 'Morocco' },
+  Netherlands: { countryCode: 'nl', shortName: 'Netherlands' },
+  'New Zealand': { countryCode: 'nz', shortName: 'New Zealand' },
+  Norway: { countryCode: 'no', shortName: 'Norway' },
+  Panama: { countryCode: 'pa', shortName: 'Panama' },
+  Paraguay: { countryCode: 'py', shortName: 'Paraguay' },
+  Portugal: { countryCode: 'pt', shortName: 'Portugal' },
+  Qatar: { countryCode: 'qa', shortName: 'Qatar' },
+  'Saudi Arabia': { countryCode: 'sa', shortName: 'Saudi Arabia' },
+  Scotland: { countryCode: 'gb-sct', shortName: 'Scotland' },
+  Senegal: { countryCode: 'sn', shortName: 'Senegal' },
+  'South Africa': { countryCode: 'za', shortName: 'South Africa' },
+  Spain: { countryCode: 'es', shortName: 'Spain' },
+  Sweden: { countryCode: 'se', shortName: 'Sweden' },
+  Switzerland: { countryCode: 'ch', shortName: 'Switzerland' },
+  TBD: { shortName: 'TBD' },
+  Tunisia: { countryCode: 'tn', shortName: 'Tunisia' },
+  Turkey: { countryCode: 'tr', shortName: 'Turkey' },
+  USA: { countryCode: 'us', shortName: 'USA' },
+  Uruguay: { countryCode: 'uy', shortName: 'Uruguay' },
+  'United States': { countryCode: 'us', shortName: 'USA' },
+  Uzbekistan: { countryCode: 'uz', shortName: 'Uzbekistan' },
 };
 
 function parseOverride(value: string): Date {
@@ -186,18 +198,15 @@ function formatKickoffFull(value: string) {
 }
 
 function getTeamMeta(team: string) {
-  return teamMeta[team] ?? { flag: '🌐', shortName: team };
+  return teamMeta[team] ?? { shortName: team };
 }
 
 function TeamBadge({ team, align = 'center' }: { team: string; align?: 'left' | 'center' | 'right' }) {
   const meta = getTeamMeta(team);
-  const isTextFlag = meta.flag.length > 2;
 
   return (
     <div className={`team-badge team-badge-${align}`}>
-      <span className={isTextFlag ? 'flag-tile flag-tile-text' : 'flag-tile'} aria-hidden="true">
-        {meta.flag}
-      </span>
+      <Flag countryCode={meta.countryCode} label={meta.shortName} />
       <strong>{meta.shortName}</strong>
     </div>
   );
@@ -413,16 +422,19 @@ function App() {
       <div className={`phone-frame ${!currentNickname ? 'auth-frame' : ''}`}>
         {currentNickname ? (
           <header className="top-bar">
-          <div className="brand-mark" aria-hidden="true">
-            🏆
-          </div>
-          <div>
-            <strong>WC 2026</strong>
-            <span>Score Predictor</span>
-          </div>
-          <button className="icon-button" type="button" aria-label="Menu">
-            ☰
-          </button>
+            <div className="brand-block">
+              <div className="brand-mark" aria-hidden="true">
+                🏆
+              </div>
+              <div>
+                <strong>WC 2026</strong>
+                <span>Score Predictor</span>
+              </div>
+            </div>
+            <TournamentRoundNav activeRound={selectedMatch ? getMatchGroup(selectedMatch) : ''} />
+            <button className="icon-button" type="button" aria-label="Menu">
+              ›
+            </button>
           </header>
         ) : null}
 
@@ -655,6 +667,28 @@ function LoginScreen({
         onLoginPinChange={onLoginPinChange}
       />
     </section>
+  );
+}
+
+function TournamentRoundNav({ activeRound }: { activeRound: string }) {
+  return (
+    <nav className="round-nav" aria-label="Tournament rounds">
+      {tournamentRounds.map((round) => {
+        const isActive = round.matchRounds.includes(activeRound);
+
+        return (
+          <button
+            className={isActive ? 'round-nav-item active' : 'round-nav-item'}
+            key={round.label}
+            type="button"
+            aria-current={isActive ? 'step' : undefined}
+          >
+            <span>{round.label}</span>
+            <small>{round.detail}</small>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -902,6 +936,9 @@ function CompactMatchCard({
         </button>
       </div>
       <TeamBadge team={match.awayTeam} />
+      <span className="match-chevron" aria-hidden="true">
+        ›
+      </span>
     </article>
   );
 }
