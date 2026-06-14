@@ -36,22 +36,22 @@ The mock data includes scheduled, live, and finished matches so you can test all
 
 ## Scoring
 
-Only the best matching rule applies:
+All matching achievements apply:
 
 - Exact score: 5 points
 - Correct goal difference: 3 points
 - Correct winner or draw: 2 points
 - Anything else: 0 points
 
-Exact score gives 5 total points, not 5 + 3 + 2.
+Example: predicting `2-0` for a `2-0` result gives 10 points total: exact score + goal difference + winner.
 
 ## Confidence Bets
 
 Each player gets one golden prediction per group/round in the local MVP.
 
 - Mark a prediction as `Gold Pick` before saving.
-- A gold pick doubles the points from the single scoring rule that applies.
-- Example: an exact score normally gives 5 points; a gold exact score gives 10.
+- A gold pick doubles the stacked points from every matching achievement.
+- Example: an exact `2-0` prediction normally gives 10 points; a gold exact `2-0` gives 20.
 - Saving a new gold pick in the same group moves the gold pick from the old match to the new one.
 
 ## Beginner-friendly structure

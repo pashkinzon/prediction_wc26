@@ -19,20 +19,15 @@ export function calculatePoints(match: Match, prediction?: Prediction): number {
   const exactScore =
     predictedScore.home === match.finalScore.home &&
     predictedScore.away === match.finalScore.away;
-
-  let basePoints = 0;
-
   const correctGoalDifference =
     predictedScore.home - predictedScore.away ===
     match.finalScore.home - match.finalScore.away;
+  const correctOutcome = getOutcome(predictedScore) === getOutcome(match.finalScore);
 
-  if (exactScore) {
-    basePoints = 5;
-  } else if (correctGoalDifference) {
-    basePoints = 3;
-  } else if (getOutcome(predictedScore) === getOutcome(match.finalScore)) {
-    basePoints = 2;
-  }
+  const basePoints =
+    (exactScore ? 5 : 0) +
+    (correctGoalDifference ? 3 : 0) +
+    (correctOutcome ? 2 : 0);
 
   return prediction.isGolden ? basePoints * 2 : basePoints;
 }
@@ -57,11 +52,6 @@ export function getScoringBreakdown(match: Match, prediction?: Prediction): stri
   return `${basePoints} x 2 = ${basePoints * 2} pts`;
 }
 
-/*
-  The old rule order is intentionally preserved:
-  exact score beats goal difference, goal difference beats winner/draw.
-  A golden prediction doubles the final single rule result, not a stack of rules.
-*/
 export function calculateSingleRulePoints(match: Match, prediction?: Prediction): number {
   if (!prediction || match.status !== 'finished' || !match.finalScore) {
     return 0;
