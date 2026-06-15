@@ -32,6 +32,38 @@ export function calculatePoints(match: Match, prediction?: Prediction): number {
   return prediction.isGolden ? basePoints * 2 : basePoints;
 }
 
+export function getScoringAchievements(match: Match, prediction?: Prediction) {
+  if (!prediction || match.status !== 'finished' || !match.finalScore) {
+    return {
+      exactScore: false,
+      goalDifference: false,
+      outcome: false,
+      goldApplied: false,
+    };
+  }
+
+  const predictedScore = {
+    home: prediction.homeScore,
+    away: prediction.awayScore,
+  };
+
+  const exactScore =
+    predictedScore.home === match.finalScore.home &&
+    predictedScore.away === match.finalScore.away;
+  const goalDifference =
+    predictedScore.home - predictedScore.away ===
+    match.finalScore.home - match.finalScore.away;
+  const outcome = getOutcome(predictedScore) === getOutcome(match.finalScore);
+  const hasBasePoints = exactScore || goalDifference || outcome;
+
+  return {
+    exactScore,
+    goalDifference,
+    outcome,
+    goldApplied: Boolean(prediction.isGolden && hasBasePoints),
+  };
+}
+
 export function calculateBasePoints(match: Match, prediction?: Prediction): number {
   if (!prediction) return 0;
   return calculatePoints(match, { ...prediction, isGolden: false });

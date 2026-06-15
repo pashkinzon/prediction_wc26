@@ -14,6 +14,7 @@ import {
   buildLeaderboard,
   calculatePoints,
   getOutcome,
+  getScoringAchievements,
   getScoringBreakdown,
 } from './utils/scoring';
 import {
@@ -34,17 +35,15 @@ const hardcodedPlayers = [
   { nickname: 'Fedor', pin: '1708' },
 ];
 
-const allRoundsFilter = 'All rounds';
-
 const tournamentRounds = [
-  { label: 'Round 1 / Live', detail: 'Live', matchRounds: ['Group A', 'Group B', 'Group C', 'Group D'] },
-  { label: 'Round 2', detail: '04D : 20H : 25M', matchRounds: ['Group E', 'Group F', 'Group G', 'Group H'] },
-  { label: 'Round 3', detail: '08D : 22H : 05M', matchRounds: ['Group I', 'Group J', 'Group K', 'Group L'] },
-  { label: 'Round of 32', detail: '12D : 22H : 05M', matchRounds: ['Last 32'] },
-  { label: 'Round of 16', detail: '12D : 20H : 05M', matchRounds: ['Last 16'] },
-  { label: 'Quarter-Finals', detail: '24D : 22H : 05M', matchRounds: ['Quarter Finals'] },
-  { label: 'Semi-Finals', detail: '28D : 22H : 05M', matchRounds: ['Semi Finals', 'Third Place'] },
-  { label: 'Final', detail: '34D : 20H', matchRounds: ['Final'] },
+  { label: 'Round 1 / Live', matchRounds: ['Group A', 'Group B', 'Group C', 'Group D'] },
+  { label: 'Round 2', matchRounds: ['Group E', 'Group F', 'Group G', 'Group H'] },
+  { label: 'Round 3', matchRounds: ['Group I', 'Group J', 'Group K', 'Group L'] },
+  { label: 'Round of 32', matchRounds: ['Last 32'] },
+  { label: 'Round of 16', matchRounds: ['Last 16'] },
+  { label: 'Quarter-Finals', matchRounds: ['Quarter Finals'] },
+  { label: 'Semi-Finals', matchRounds: ['Semi Finals', 'Third Place'] },
+  { label: 'Final', matchRounds: ['Final'] },
 ];
 
 function getStoredHardcodedPlayer() {
@@ -140,33 +139,73 @@ function getMatchDateLabel(value: string) {
   }).format(new Date(value));
 }
 
-function getRoundSortValue(roundName: string) {
-  const groupMatch = roundName.match(/^Group ([A-Z])$/);
-  if (groupMatch) return `0-${groupMatch[1]}`;
-  if (roundName === 'World Cup') return '9-World Cup';
-  return `5-${roundName}`;
+function getMatchDateTimeLabel(value: string, effectiveNow: Date) {
+  const kickoff = new Date(value);
+  const dayLabel = new Intl.DateTimeFormat(undefined, {
+    day: '2-digit',
+    month: 'short',
+  }).format(kickoff);
+  const timeLabel = new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(kickoff);
+
+  if (kickoff.toDateString() === effectiveNow.toDateString()) {
+    return `Today ${timeLabel}`;
+  }
+
+  const tomorrow = new Date(effectiveNow);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (kickoff.toDateString() === tomorrow.toDateString()) {
+    return `Tomorrow ${timeLabel}`;
+  }
+
+  return `${dayLabel} ${timeLabel}`;
 }
 
-function getAvailableRounds(matches: Match[]) {
-  return [...new Set(matches.map(getMatchGroup))].sort((a, b) =>
-    getRoundSortValue(a).localeCompare(getRoundSortValue(b)),
-  );
+function formatCountdown(targetDate: Date, effectiveNow: Date) {
+  const diffMs = targetDate.getTime() - effectiveNow.getTime();
+  if (diffMs <= 0) return 'Live';
+
+  const totalMinutes = Math.floor(diffMs / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+
+  return `${days}D · ${hours.toString().padStart(2, '0')}H · ${minutes
+    .toString()
+    .padStart(2, '0')}M`;
 }
 
-function matchesSearch(match: Match, query: string) {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) return true;
+function getRoundCountdownLabel(
+  round: { matchRounds: string[] },
+  matches: Match[],
+  effectiveNow: Date,
+) {
+  const roundMatches = matches.filter((match) => round.matchRounds.includes(getMatchGroup(match)));
+  if (roundMatches.some((match) => match.status === 'live')) return 'Live';
 
-  return [
-    match.homeTeam,
-    match.awayTeam,
-    getTeamMeta(match.homeTeam).shortName,
-    getTeamMeta(match.awayTeam).shortName,
-    getMatchGroup(match),
-  ]
-    .join(' ')
-    .toLowerCase()
-    .includes(normalizedQuery);
+  const futureStarts = roundMatches
+    .map((match) => new Date(match.kickoffTime))
+    .filter((kickoff) => kickoff > effectiveNow)
+    .sort((a, b) => a.getTime() - b.getTime());
+
+  if (futureStarts[0]) return formatCountdown(futureStarts[0], effectiveNow);
+  if (roundMatches.length > 0) return 'Done';
+  return 'TBD';
+}
+
+function getStageGoldPick(
+  match: Match,
+  currentNickname: string,
+  matches: Match[],
+  predictions: Prediction[],
+) {
+  return predictions.find((prediction) => {
+    if (prediction.userNickname !== currentNickname || !prediction.isGolden) return false;
+    const predictedMatch = matches.find((item) => item.id === prediction.matchId);
+    return Boolean(predictedMatch && getMatchGroup(predictedMatch) === getMatchGroup(match));
+  });
 }
 
 function getPreferredSelectedMatch(matches: Match[], effectiveNow: Date) {
@@ -431,7 +470,11 @@ function App() {
                 <span>Score Predictor</span>
               </div>
             </div>
-            <TournamentRoundNav activeRound={selectedMatch ? getMatchGroup(selectedMatch) : ''} />
+            <TournamentRoundNav
+              activeRound={selectedMatch ? getMatchGroup(selectedMatch) : ''}
+              effectiveNow={effectiveNow}
+              matches={matches}
+            />
             <button className="icon-button" type="button" aria-label="Menu">
               ›
             </button>
@@ -544,35 +587,28 @@ function MatchesScreen({
   onSavePrediction,
   onToggleReaction,
 }: MatchesScreenProps) {
-  const [matchSearchQuery, setMatchSearchQuery] = useState('');
-  const [roundFilter, setRoundFilter] = useState(allRoundsFilter);
-  const availableRounds = useMemo(() => getAvailableRounds(matches), [matches]);
-  const filteredMatches = useMemo(
-    () =>
-      matches.filter(
-        (match) =>
-          (roundFilter === allRoundsFilter || getMatchGroup(match) === roundFilter) &&
-          matchesSearch(match, matchSearchQuery),
-      ),
-    [matches, matchSearchQuery, roundFilter],
+  const [showPreviousMatches, setShowPreviousMatches] = useState(false);
+  const liveMatches = sortMatchesByKickoff(matches.filter((match) => match.status === 'live'));
+  const futureMatches = sortMatchesByKickoff(
+    matches.filter((match) => isMatchOpenForPrediction(match, effectiveNow)),
   );
-  const upcomingMatches = sortMatchesByKickoff(
-    filteredMatches.filter((match) => isMatchOpenForPrediction(match, effectiveNow)),
+  const previousMatches = sortMatchesByKickoff(
+    matches.filter(
+      (match) =>
+        match.status === 'finished' ||
+        (match.status !== 'live' && new Date(match.kickoffTime) <= effectiveNow),
+    ),
   );
-  const activeAndResultMatches = sortMatchesByKickoff(
-    filteredMatches.filter((match) => !isMatchOpenForPrediction(match, effectiveNow)),
-  );
-  const openCount = matches.filter((match) => isMatchOpenForPrediction(match, effectiveNow)).length;
-  const liveCount = matches.filter((match) => match.status === 'live').length;
-  const finishedCount = matches.filter((match) => match.status === 'finished').length;
+  const currentUserPoints =
+    leaderboardRows.find((row) => row.nickname === currentNickname)?.totalPoints ?? 0;
 
   return (
     <div className="matches-layout">
       <section className="home-screen">
         <div className="welcome-block">
-          <p className="eyebrow">Welcome back</p>
-          <h1>{currentNickname ? currentNickname : 'Ready for kickoff?'}</h1>
-          <p className="muted">Make your predictions before kickoff.</p>
+          <p className="eyebrow">Welcome back, {currentNickname}</p>
+          <h1>Match Center</h1>
+          <p className="muted">Live, upcoming, and recent matches at a glance.</p>
         </div>
 
         {isLoadingData ? <p className="sync-note">Syncing Supabase data...</p> : null}
@@ -583,35 +619,22 @@ function MatchesScreen({
           onLogout={onLogout}
         />
 
-        <MatchBrowserControls
-          availableRounds={availableRounds}
-          finishedCount={finishedCount}
-          liveCount={liveCount}
-          matchSearchQuery={matchSearchQuery}
-          openCount={openCount}
-          roundFilter={roundFilter}
-          totalCount={matches.length}
-          onRoundFilterChange={setRoundFilter}
-          onSearchChange={setMatchSearchQuery}
+        <MatchCenterStats
+          currentUserPoints={currentUserPoints}
+          futureMatchesCount={futureMatches.length}
+          leaderboardSize={leaderboardRows.length}
+          matchesPassedCount={previousMatches.length}
+          rank={currentUserRank >= 0 ? currentUserRank + 1 : undefined}
         />
 
-        <MatchListSection
-          emptyText="No upcoming matches match your filters."
+        <AllMatchesSection
           effectiveNow={effectiveNow}
-          matches={upcomingMatches}
+          futureMatches={futureMatches}
+          liveMatches={liveMatches}
+          previousMatches={previousMatches}
           selectedMatch={selectedMatch}
-          title="Upcoming Matches"
-          subtitle="Tap predict to open match details."
-          onOpenMatch={onOpenMatch}
-        />
-
-        <MatchListSection
-          emptyText="No live or finished matches match your filters."
-          effectiveNow={effectiveNow}
-          matches={activeAndResultMatches}
-          selectedMatch={selectedMatch}
-          title="Live & Results"
-          subtitle="Predictions are visible after kickoff."
+          showPreviousMatches={showPreviousMatches}
+          onShowPreviousMatchesChange={setShowPreviousMatches}
           onOpenMatch={onOpenMatch}
         />
 
@@ -623,6 +646,7 @@ function MatchesScreen({
         currentUserRank={currentUserRank}
         effectiveNow={effectiveNow}
         match={selectedMatch}
+        matches={matches}
         predictions={predictions}
         reactions={reactions}
         onSavePrediction={onSavePrediction}
@@ -670,7 +694,15 @@ function LoginScreen({
   );
 }
 
-function TournamentRoundNav({ activeRound }: { activeRound: string }) {
+function TournamentRoundNav({
+  activeRound,
+  effectiveNow,
+  matches,
+}: {
+  activeRound: string;
+  effectiveNow: Date;
+  matches: Match[];
+}) {
   return (
     <nav className="round-nav" aria-label="Tournament rounds">
       {tournamentRounds.map((round) => {
@@ -684,7 +716,7 @@ function TournamentRoundNav({ activeRound }: { activeRound: string }) {
             aria-current={isActive ? 'step' : undefined}
           >
             <span>{round.label}</span>
-            <small>{round.detail}</small>
+            <small>{getRoundCountdownLabel(round, matches, effectiveNow)}</small>
           </button>
         );
       })}
@@ -715,124 +747,110 @@ function UserCard({
   );
 }
 
-function MatchBrowserControls({
-  availableRounds,
-  finishedCount,
-  liveCount,
-  matchSearchQuery,
-  openCount,
-  roundFilter,
-  totalCount,
-  onRoundFilterChange,
-  onSearchChange,
+function MatchCenterStats({
+  currentUserPoints,
+  futureMatchesCount,
+  leaderboardSize,
+  matchesPassedCount,
+  rank,
 }: {
-  availableRounds: string[];
-  finishedCount: number;
-  liveCount: number;
-  matchSearchQuery: string;
-  openCount: number;
-  roundFilter: string;
-  totalCount: number;
-  onRoundFilterChange: (round: string) => void;
-  onSearchChange: (query: string) => void;
+  currentUserPoints: number;
+  futureMatchesCount: number;
+  leaderboardSize: number;
+  matchesPassedCount: number;
+  rank?: number;
 }) {
+  const stats: {
+    icon: string;
+    label: string;
+    value: number | string;
+    suffix?: string;
+    tone: string;
+  }[] = [
+    { icon: '✓', label: 'Matches passed', value: matchesPassedCount, tone: 'green' },
+    { icon: '◷', label: 'Future matches', value: futureMatchesCount, tone: 'blue' },
+    { icon: '☆', label: 'Amount of points', value: currentUserPoints, tone: 'gold' },
+    {
+      icon: '♙',
+      label: 'Rank among friends',
+      value: rank ? `${rank}` : '-',
+      suffix: leaderboardSize > 0 ? `of ${leaderboardSize}` : '',
+      tone: 'purple',
+    },
+  ];
+
   return (
-    <section className="match-browser">
-      <div className="match-stats" aria-label="Match overview">
-        <span>
-          <strong>{totalCount}</strong>
-          matches
-        </span>
-        <span>
-          <strong>{openCount}</strong>
-          open
-        </span>
-        <span>
-          <strong>{liveCount}</strong>
-          live
-        </span>
-        <span>
-          <strong>{finishedCount}</strong>
-          done
-        </span>
-      </div>
-
-      <label className="search-field">
-        Search teams
-        <input
-          placeholder="Mexico, Group A, USA..."
-          type="search"
-          value={matchSearchQuery}
-          onChange={(event) => onSearchChange(event.target.value)}
-        />
-      </label>
-
-      <div className="round-filter" aria-label="Round filter">
-        {[allRoundsFilter, ...availableRounds].map((round) => (
-          <button
-            className={roundFilter === round ? 'active' : ''}
-            key={round}
-            type="button"
-            onClick={() => onRoundFilterChange(round)}
-          >
-            {round}
-          </button>
-        ))}
-      </div>
+    <section className="match-center-stats" aria-label="Match center overview">
+      {stats.map((stat) => (
+        <article className={`stat-card stat-card-${stat.tone}`} key={stat.label}>
+          <span aria-hidden="true">{stat.icon}</span>
+          <div>
+            <small>{stat.label}</small>
+            <strong>
+              {stat.value}
+              {stat.suffix ? <em> {stat.suffix}</em> : null}
+            </strong>
+          </div>
+        </article>
+      ))}
     </section>
   );
 }
 
-function MatchListSection({
+function AllMatchesSection({
   effectiveNow,
-  emptyText,
-  matches,
+  futureMatches,
+  liveMatches,
+  previousMatches,
   selectedMatch,
-  subtitle,
-  title,
+  showPreviousMatches,
+  onShowPreviousMatchesChange,
   onOpenMatch,
 }: {
   effectiveNow: Date;
-  emptyText: string;
-  matches: Match[];
+  futureMatches: Match[];
+  liveMatches: Match[];
+  previousMatches: Match[];
   selectedMatch: Match;
-  subtitle: string;
-  title: string;
+  showPreviousMatches: boolean;
+  onShowPreviousMatchesChange: (showPreviousMatches: boolean) => void;
   onOpenMatch: (matchId: string) => void;
 }) {
-  return (
-    <section className="match-section">
-      <div className="section-title">
-        <div>
-          <h2>{title}</h2>
-          <p className="muted">{subtitle}</p>
-        </div>
-      </div>
-      {matches.length > 0 ? (
-        <div className="match-list">
-          {matches.map((match, index) => {
-            const previousMatch = matches[index - 1];
-            const dateLabel = getMatchDateLabel(match.kickoffTime);
-            const previousDateLabel = previousMatch
-              ? getMatchDateLabel(previousMatch.kickoffTime)
-              : '';
-            const shouldShowDate = dateLabel !== previousDateLabel;
+  const visibleMatches = [
+    ...liveMatches,
+    ...futureMatches,
+    ...(showPreviousMatches ? previousMatches : []),
+  ];
 
-            return (
-              <div className="match-list-item" key={match.id}>
-                {shouldShowDate ? <p className="date-separator">{dateLabel}</p> : null}
-                <CompactMatchCard
-                  effectiveNow={effectiveNow}
-                  isSelected={match.id === selectedMatch.id}
-                  match={match}
-                  onOpenMatch={onOpenMatch}
-                />
-              </div>
-            );
-          })}
+  return (
+    <section className="all-matches-card">
+      <div className="all-matches-toolbar">
+        <button
+          className="show-previous-button"
+          type="button"
+          onClick={() => onShowPreviousMatchesChange(!showPreviousMatches)}
+        >
+          {showPreviousMatches ? 'Hide previous matches' : 'Show previous matches'}
+          <span aria-hidden="true">{showPreviousMatches ? '⌃' : '⌄'}</span>
+        </button>
+        <h2>All Matches</h2>
+        <span>{visibleMatches.length} shown</span>
+      </div>
+      {visibleMatches.length > 0 ? (
+        <div className="all-match-list">
+          {visibleMatches.map((match) => (
+            <CompactMatchCard
+              effectiveNow={effectiveNow}
+              isPast={previousMatches.some((item) => item.id === match.id)}
+              isSelected={match.id === selectedMatch.id}
+              key={match.id}
+              match={match}
+              onOpenMatch={onOpenMatch}
+            />
+          ))}
         </div>
       ) : (
-        <p className="empty-state">{emptyText}</p>
+        <p className="empty-state">No matches available yet.</p>
       )}
     </section>
   );
@@ -901,11 +919,13 @@ function PlayerPinForm({
 
 function CompactMatchCard({
   effectiveNow,
+  isPast = false,
   isSelected,
   match,
   onOpenMatch,
 }: {
   effectiveNow: Date;
+  isPast?: boolean;
   isSelected: boolean;
   match: Match;
   onOpenMatch: (matchId: string) => void;
@@ -916,26 +936,40 @@ function CompactMatchCard({
   const statusLabel = match.status === 'finished' ? 'Result' : match.status;
 
   return (
-    <article className={`compact-match ${isSelected ? 'compact-match-active' : ''}`}>
-      <TeamBadge team={match.homeTeam} />
-      <div className="compact-center">
-        <span>{getMatchGroup(match)}</span>
+    <article
+      className={`compact-match ${isSelected ? 'compact-match-active' : ''} ${
+        isPast ? 'compact-match-past' : ''
+      }`}
+    >
+      <div className="compact-time">
+        {match.status === 'live' ? (
+          <em className="live-pill">Live</em>
+        ) : (
+          <time dateTime={match.kickoffTime}>
+            {getMatchDateTimeLabel(match.kickoffTime, effectiveNow)}
+          </time>
+        )}
+        {match.status !== 'scheduled' ? (
+          <em className={`match-status match-status-${match.status}`}>{statusLabel}</em>
+        ) : null}
+      </div>
+      <span className="compact-stage">{getMatchGroup(match)}</span>
+      <TeamBadge team={match.homeTeam} align="left" />
+      <strong className="compact-vs">vs</strong>
+      <TeamBadge team={match.awayTeam} align="right" />
+      <div className="compact-result">
+        {match.status === 'live' ? <small>{statusLabel}</small> : null}
         {match.finalScore ? (
           <strong>
             {match.finalScore.home} - {match.finalScore.away}
           </strong>
         ) : (
-          <strong>vs</strong>
+          <span aria-hidden="true">◷</span>
         )}
-        <time dateTime={match.kickoffTime}>{formatKickoff(match.kickoffTime)}</time>
-        {match.status !== 'scheduled' ? (
-          <em className={`match-status match-status-${match.status}`}>{statusLabel}</em>
-        ) : null}
         <button type="button" onClick={() => onOpenMatch(match.id)}>
           {isLocked ? 'View' : 'Predict'}
         </button>
       </div>
-      <TeamBadge team={match.awayTeam} />
       <span className="match-chevron" aria-hidden="true">
         ›
       </span>
@@ -948,6 +982,7 @@ function MatchDetailScreen({
   currentUserRank,
   effectiveNow,
   match,
+  matches,
   predictions,
   reactions,
   onSavePrediction,
@@ -957,6 +992,7 @@ function MatchDetailScreen({
   currentUserRank: number;
   effectiveNow: Date;
   match: Match;
+  matches: Match[];
   predictions: Prediction[];
   reactions: PredictionReaction[];
   onSavePrediction: (
@@ -987,6 +1023,10 @@ function MatchDetailScreen({
   const awayScore = userPrediction?.awayScore ?? '';
   const selectedOutcome = userPrediction
     ? getOutcome({ home: userPrediction.homeScore, away: userPrediction.awayScore })
+    : undefined;
+  const stageGoldPick = getStageGoldPick(match, currentNickname, matches, predictions);
+  const stageGoldMatch = stageGoldPick
+    ? matches.find((item) => item.id === stageGoldPick.matchId)
     : undefined;
 
   return (
@@ -1050,7 +1090,12 @@ function MatchDetailScreen({
             <div className="golden-pick-card">
               <div>
                 <strong>Confidence Bets</strong>
-                <span>One golden prediction per group. Gold doubles your points.</span>
+                <span>
+                  One golden prediction per {getMatchGroup(match)}. Gold doubles earned points.
+                  {stageGoldMatch && stageGoldMatch.id !== match.id
+                    ? ` Current: ${getTeamMeta(stageGoldMatch.homeTeam).shortName} vs ${getTeamMeta(stageGoldMatch.awayTeam).shortName}.`
+                    : ''}
+                </span>
               </div>
               <label className="gold-toggle">
                 <input
@@ -1262,6 +1307,45 @@ function LeaderboardPreview({ rows }: { rows: ReturnType<typeof buildLeaderboard
   );
 }
 
+function ScoringIcons({
+  match,
+  prediction,
+}: {
+  match: Match;
+  prediction: Prediction;
+}) {
+  const achievements = getScoringAchievements(match, prediction);
+  const items = [
+    { key: 'exact', icon: '◎', label: 'Exact score', earned: achievements.exactScore },
+    { key: 'diff', icon: '▥', label: 'Goal difference', earned: achievements.goalDifference },
+    { key: 'result', icon: '♕', label: 'Winner/draw', earned: achievements.outcome },
+  ];
+
+  return (
+    <div className="scoring-icons" aria-label="Scoring achievements">
+      {items.map((item) => (
+        <span
+          className={item.earned ? `score-icon score-icon-${item.key} earned` : 'score-icon'}
+          key={item.key}
+          title={item.label}
+        >
+          <b aria-hidden="true">{item.icon}</b>
+          <small>{item.label}</small>
+        </span>
+      ))}
+      {prediction.isGolden ? (
+        <span
+          className={achievements.goldApplied ? 'score-icon score-icon-gold earned' : 'score-icon score-icon-gold'}
+          title="Gold pick"
+        >
+          <b aria-hidden="true">☆</b>
+          <small>Gold x2</small>
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function PredictionsScreen({
   currentNickname,
   matches,
@@ -1276,35 +1360,94 @@ function PredictionsScreen({
   const myPredictions = predictions.filter(
     (prediction) => prediction.userNickname === currentNickname,
   );
+  const predictionHistory = sortMatchesByKickoff(
+    myPredictions
+      .map((prediction) => matches.find((item) => item.id === prediction.matchId))
+      .filter((match): match is Match => Boolean(match?.finalScore && match.status === 'finished')),
+  );
 
   return (
-    <section className="simple-screen">
-      <h1>My Predictions</h1>
-      <p className="muted">{currentNickname || 'Choose a nickname on Matches first.'}</p>
-      <div className="prediction-summary-list">
-        {myPredictions.length === 0 ? <p className="empty-state">No predictions saved yet.</p> : null}
-        {myPredictions.map((prediction) => {
-          const match = matches.find((item) => item.id === prediction.matchId);
-          if (!match) return null;
+    <section className="predictions-screen">
+      <div className="predictions-hero">
+        <h1>My Predictions</h1>
+        <p>{currentNickname || 'Choose a nickname on Matches first.'}</p>
+      </div>
+      <div className="prediction-history-card">
+        <div className="prediction-history-heading">
+          <div>
+            <h2>Prediction History</h2>
+            <p>All previous predictions in chronological order.</p>
+          </div>
+          <div className="scoring-legend">
+            <strong>Scoring System</strong>
+            <span><b>◎</b> Exact score <em>5 pts</em></span>
+            <span><b>▥</b> Goal difference <em>3 pts</em></span>
+            <span><b>♕</b> Winner / Draw <em>2 pts</em></span>
+            <span><b>☆</b> Gold pick <em>x2</em></span>
+          </div>
+        </div>
+        <div className="prediction-history-header" aria-hidden="true">
+          <span>Date & time</span>
+          <span>Match</span>
+          <span>Actual final score</span>
+          <span>Points earned</span>
+          <span>How points were earned</span>
+        </div>
+        {predictionHistory.length === 0 ? (
+          <p className="empty-state">No finished predictions yet.</p>
+        ) : null}
+        <div className="prediction-history-list">
+          {predictionHistory.map((match, index) => {
+            const prediction = myPredictions.find((item) => item.matchId === match.id);
+            if (!prediction || !match.finalScore) return null;
 
-          return (
-            <button
-              className="prediction-summary"
-              key={`${prediction.matchId}-${prediction.userNickname}`}
-              type="button"
-              onClick={() => onOpenMatch(match.id)}
-            >
-              <span>
-                {match.homeTeam} vs {match.awayTeam}
-                {prediction.isGolden ? <b className="inline-gold">⭐ Gold</b> : null}
-              </span>
-              <strong>
-                {prediction.homeScore} - {prediction.awayScore}
-              </strong>
-              <em>{calculatePoints(match, prediction)} pts</em>
-            </button>
-          );
-        })}
+            const previousMatch = predictionHistory[index - 1];
+            const dateLabel = getMatchDateLabel(match.kickoffTime);
+            const previousDateLabel = previousMatch
+              ? getMatchDateLabel(previousMatch.kickoffTime)
+              : '';
+            const shouldShowDate = dateLabel !== previousDateLabel;
+            const points = calculatePoints(match, prediction);
+
+            return (
+              <div className="prediction-history-group" key={`${prediction.matchId}-${prediction.userNickname}`}>
+                {shouldShowDate ? <h3>{dateLabel}</h3> : null}
+                <button
+                  className="prediction-history-row"
+                  type="button"
+                  onClick={() => onOpenMatch(match.id)}
+                >
+                  <div className="prediction-time">
+                    <time dateTime={match.kickoffTime}>
+                      {new Intl.DateTimeFormat(undefined, {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }).format(new Date(match.kickoffTime))}
+                    </time>
+                    <span>{getMatchGroup(match)}</span>
+                  </div>
+                  <div className="prediction-matchup">
+                    <TeamBadge team={match.homeTeam} align="left" />
+                    <strong>vs</strong>
+                    <TeamBadge team={match.awayTeam} align="right" />
+                  </div>
+                  <div className="actual-score-block">
+                    <strong>
+                      {match.finalScore.home} - {match.finalScore.away}
+                    </strong>
+                    <span>
+                      Your pick {prediction.homeScore} - {prediction.awayScore}
+                    </span>
+                  </div>
+                  <em className={points > 0 ? 'history-points earned' : 'history-points'}>
+                    {points} pts
+                  </em>
+                  <ScoringIcons match={match} prediction={prediction} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
