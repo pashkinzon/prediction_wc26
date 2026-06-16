@@ -36,14 +36,46 @@ const hardcodedPlayers = [
 ];
 
 const tournamentRounds = [
-  { label: 'Round 1 / Live', matchRounds: ['Group A', 'Group B', 'Group C', 'Group D'] },
-  { label: 'Round 2', matchRounds: ['Group E', 'Group F', 'Group G', 'Group H'] },
-  { label: 'Round 3', matchRounds: ['Group I', 'Group J', 'Group K', 'Group L'] },
-  { label: 'Round of 32', matchRounds: ['Last 32'] },
-  { label: 'Round of 16', matchRounds: ['Last 16'] },
-  { label: 'Quarter-Finals', matchRounds: ['Quarter Finals'] },
-  { label: 'Semi-Finals', matchRounds: ['Semi Finals', 'Third Place'] },
-  { label: 'Final', matchRounds: ['Final'] },
+  {
+    label: 'Round 1 / Live',
+    startTime: '2026-06-11T21:00:00+02:00',
+    matchRounds: ['Group A', 'Group B', 'Group C', 'Group D'],
+  },
+  {
+    label: 'Round 2',
+    startTime: '2026-06-18T18:00:00+02:00',
+    matchRounds: ['Group E', 'Group F', 'Group G', 'Group H'],
+  },
+  {
+    label: 'Round 3',
+    startTime: '2026-06-24T21:00:00+02:00',
+    matchRounds: ['Group I', 'Group J', 'Group K', 'Group L'],
+  },
+  {
+    label: 'Round of 32',
+    startTime: '2026-06-28T21:00:00+02:00',
+    matchRounds: ['Last 32'],
+  },
+  {
+    label: 'Round of 16',
+    startTime: '2026-07-04T19:00:00+02:00',
+    matchRounds: ['Last 16'],
+  },
+  {
+    label: 'Quarter-Finals',
+    startTime: '2026-07-09T22:00:00+02:00',
+    matchRounds: ['Quarter Finals'],
+  },
+  {
+    label: 'Semi-Finals',
+    startTime: '2026-07-14T21:00:00+02:00',
+    matchRounds: ['Semi Finals', 'Third Place'],
+  },
+  {
+    label: 'Final',
+    startTime: '2026-07-19T21:00:00+02:00',
+    matchRounds: ['Final'],
+  },
 ];
 
 function getStoredHardcodedPlayer() {
@@ -178,21 +210,26 @@ function formatCountdown(targetDate: Date, effectiveNow: Date) {
 }
 
 function getRoundCountdownLabel(
-  round: { matchRounds: string[] },
-  matches: Match[],
+  round: { startTime: string },
+  roundIndex: number,
   effectiveNow: Date,
 ) {
-  const roundMatches = matches.filter((match) => round.matchRounds.includes(getMatchGroup(match)));
-  if (roundMatches.some((match) => match.status === 'live')) return 'Live';
+  const start = new Date(round.startTime);
+  const nextStart = tournamentRounds[roundIndex + 1]
+    ? new Date(tournamentRounds[roundIndex + 1].startTime)
+    : undefined;
 
-  const futureStarts = roundMatches
-    .map((match) => new Date(match.kickoffTime))
-    .filter((kickoff) => kickoff > effectiveNow)
-    .sort((a, b) => a.getTime() - b.getTime());
+  if (effectiveNow >= start && (!nextStart || effectiveNow < nextStart)) return 'Live';
+  if (effectiveNow < start) return formatCountdown(start, effectiveNow);
+  return 'Done';
+}
 
-  if (futureStarts[0]) return formatCountdown(futureStarts[0], effectiveNow);
-  if (roundMatches.length > 0) return 'Done';
-  return 'TBD';
+function isRoundActive(round: { startTime: string }, roundIndex: number, effectiveNow: Date) {
+  const start = new Date(round.startTime);
+  const nextStart = tournamentRounds[roundIndex + 1]
+    ? new Date(tournamentRounds[roundIndex + 1].startTime)
+    : undefined;
+  return effectiveNow >= start && (!nextStart || effectiveNow < nextStart);
 }
 
 function getStageGoldPick(
@@ -471,9 +508,7 @@ function App() {
               </div>
             </div>
             <TournamentRoundNav
-              activeRound={selectedMatch ? getMatchGroup(selectedMatch) : ''}
               effectiveNow={effectiveNow}
-              matches={matches}
             />
             <button className="icon-button" type="button" aria-label="Menu">
               ›
@@ -601,10 +636,11 @@ function MatchesScreen({
   );
   const currentUserPoints =
     leaderboardRows.find((row) => row.nickname === currentNickname)?.totalPoints ?? 0;
+  const recentMatches = [...previousMatches].reverse();
 
   return (
-    <div className="matches-layout">
-      <section className="home-screen">
+    <div className="matches-dashboard">
+      <section className="match-center-top">
         <div className="welcome-block">
           <p className="eyebrow">Welcome back, {currentNickname}</p>
           <h1>Match Center</h1>
@@ -614,11 +650,6 @@ function MatchesScreen({
         {isLoadingData ? <p className="sync-note">Syncing Supabase data...</p> : null}
         {syncError ? <p className="sync-error">{syncError}</p> : null}
 
-        <UserCard
-          currentNickname={currentNickname}
-          onLogout={onLogout}
-        />
-
         <MatchCenterStats
           currentUserPoints={currentUserPoints}
           futureMatchesCount={futureMatches.length}
@@ -626,7 +657,24 @@ function MatchesScreen({
           matchesPassedCount={previousMatches.length}
           rank={currentUserRank >= 0 ? currentUserRank + 1 : undefined}
         />
+      </section>
 
+      <UserCard
+        currentNickname={currentNickname}
+        onLogout={onLogout}
+      />
+
+      <MatchOverviewGrid
+        currentNickname={currentNickname}
+        effectiveNow={effectiveNow}
+        futureMatches={futureMatches}
+        liveMatches={liveMatches}
+        predictions={predictions}
+        recentMatches={recentMatches}
+        onOpenMatch={onOpenMatch}
+      />
+
+      <section className="matches-bottom-grid">
         <AllMatchesSection
           effectiveNow={effectiveNow}
           futureMatches={futureMatches}
@@ -637,21 +685,20 @@ function MatchesScreen({
           onShowPreviousMatchesChange={setShowPreviousMatches}
           onOpenMatch={onOpenMatch}
         />
-
-        <LeaderboardPreview rows={leaderboardRows} />
+        <div className="match-detail-dock">
+          <MatchDetailScreen
+            currentNickname={currentNickname}
+            currentUserRank={currentUserRank}
+            effectiveNow={effectiveNow}
+            match={selectedMatch}
+            matches={matches}
+            predictions={predictions}
+            reactions={reactions}
+            onSavePrediction={onSavePrediction}
+            onToggleReaction={onToggleReaction}
+          />
+        </div>
       </section>
-
-      <MatchDetailScreen
-        currentNickname={currentNickname}
-        currentUserRank={currentUserRank}
-        effectiveNow={effectiveNow}
-        match={selectedMatch}
-        matches={matches}
-        predictions={predictions}
-        reactions={reactions}
-        onSavePrediction={onSavePrediction}
-        onToggleReaction={onToggleReaction}
-      />
     </div>
   );
 }
@@ -695,18 +742,14 @@ function LoginScreen({
 }
 
 function TournamentRoundNav({
-  activeRound,
   effectiveNow,
-  matches,
 }: {
-  activeRound: string;
   effectiveNow: Date;
-  matches: Match[];
 }) {
   return (
     <nav className="round-nav" aria-label="Tournament rounds">
-      {tournamentRounds.map((round) => {
-        const isActive = round.matchRounds.includes(activeRound);
+      {tournamentRounds.map((round, index) => {
+        const isActive = isRoundActive(round, index, effectiveNow);
 
         return (
           <button
@@ -716,7 +759,7 @@ function TournamentRoundNav({
             aria-current={isActive ? 'step' : undefined}
           >
             <span>{round.label}</span>
-            <small>{getRoundCountdownLabel(round, matches, effectiveNow)}</small>
+            <small>{getRoundCountdownLabel(round, index, effectiveNow)}</small>
           </button>
         );
       })}
@@ -853,6 +896,141 @@ function AllMatchesSection({
         <p className="empty-state">No matches available yet.</p>
       )}
     </section>
+  );
+}
+
+function MatchOverviewGrid({
+  currentNickname,
+  effectiveNow,
+  futureMatches,
+  liveMatches,
+  predictions,
+  recentMatches,
+  onOpenMatch,
+}: {
+  currentNickname: string;
+  effectiveNow: Date;
+  futureMatches: Match[];
+  liveMatches: Match[];
+  predictions: Prediction[];
+  recentMatches: Match[];
+  onOpenMatch: (matchId: string) => void;
+}) {
+  return (
+    <section className="match-overview-grid" aria-label="Match overview">
+      <MatchOverviewPanel
+        currentNickname={currentNickname}
+        effectiveNow={effectiveNow}
+        emptyText="No live matches right now."
+        matches={liveMatches.slice(0, 2)}
+        predictions={predictions}
+        title="Live Now"
+        titleBadge="Live"
+        totalCount={liveMatches.length}
+        variant="live"
+        onOpenMatch={onOpenMatch}
+      />
+      <MatchOverviewPanel
+        currentNickname={currentNickname}
+        effectiveNow={effectiveNow}
+        emptyText="No upcoming matches."
+        matches={futureMatches.slice(0, 3)}
+        predictions={predictions}
+        title="Up Next"
+        totalCount={futureMatches.length}
+        variant="upcoming"
+        onOpenMatch={onOpenMatch}
+      />
+      <MatchOverviewPanel
+        currentNickname={currentNickname}
+        effectiveNow={effectiveNow}
+        emptyText="No finished matches yet."
+        matches={recentMatches.slice(0, 3)}
+        predictions={predictions}
+        title="Recently Finished"
+        totalCount={recentMatches.length}
+        variant="finished"
+        onOpenMatch={onOpenMatch}
+      />
+    </section>
+  );
+}
+
+function MatchOverviewPanel({
+  currentNickname,
+  effectiveNow,
+  emptyText,
+  matches,
+  predictions,
+  title,
+  titleBadge,
+  totalCount,
+  variant,
+  onOpenMatch,
+}: {
+  currentNickname: string;
+  effectiveNow: Date;
+  emptyText: string;
+  matches: Match[];
+  predictions: Prediction[];
+  title: string;
+  titleBadge?: string;
+  totalCount: number;
+  variant: 'live' | 'upcoming' | 'finished';
+  onOpenMatch: (matchId: string) => void;
+}) {
+  return (
+    <article className="overview-panel">
+      <div className="overview-panel-heading">
+        <h2>{title}</h2>
+        {titleBadge ? <span>{titleBadge}</span> : null}
+        <small>{totalCount} matches</small>
+      </div>
+      <div className="overview-list">
+        {matches.length === 0 ? <p className="empty-state">{emptyText}</p> : null}
+        {matches.map((match) => {
+          const myPrediction = predictions.find(
+            (prediction) =>
+              prediction.matchId === match.id &&
+              prediction.userNickname === currentNickname,
+          );
+
+          return (
+            <button
+              className={`overview-match overview-match-${variant}`}
+              key={match.id}
+              type="button"
+              onClick={() => onOpenMatch(match.id)}
+            >
+              <span className="overview-stage">{getMatchGroup(match)}</span>
+              <div className="overview-teams">
+                <TeamBadge team={match.homeTeam} />
+                <strong>
+                  {match.finalScore ? `${match.finalScore.home} - ${match.finalScore.away}` : 'vs'}
+                </strong>
+                <TeamBadge team={match.awayTeam} />
+              </div>
+              <div className="overview-meta">
+                {match.status === 'live' ? <em>Live</em> : null}
+                {match.status === 'finished' ? <em>FT</em> : null}
+                {match.status === 'scheduled' ? (
+                  <time dateTime={match.kickoffTime}>{getMatchDateTimeLabel(match.kickoffTime, effectiveNow)}</time>
+                ) : null}
+              </div>
+              {myPrediction ? (
+                <div className="overview-prediction">
+                  <span>Your prediction</span>
+                  <strong>
+                    {myPrediction.homeScore} - {myPrediction.awayScore}
+                  </strong>
+                  {match.status === 'finished' ? <em>{calculatePoints(match, myPrediction)} pts</em> : null}
+                </div>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </article>
   );
 }
 

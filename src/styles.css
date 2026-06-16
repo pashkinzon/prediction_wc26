@@ -240,6 +240,22 @@ label {
   gap: clamp(1rem, 4vw, 3rem);
 }
 
+.matches-dashboard {
+  display: grid;
+  gap: 1rem;
+}
+
+.match-center-top {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1fr) minmax(34rem, 1.8fr);
+  gap: 1.2rem;
+  align-items: end;
+}
+
+.matches-dashboard > .user-card {
+  max-width: 32rem;
+}
+
 .home-screen,
 .login-screen,
 .simple-screen,
@@ -444,6 +460,149 @@ label {
 
 .stat-card-purple {
   color: #6d28d9;
+}
+
+.match-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid rgba(220, 226, 239, 0.95);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 38px rgba(0, 21, 94, 0.16);
+  overflow: hidden;
+}
+
+.overview-panel {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1rem;
+}
+
+.overview-panel + .overview-panel {
+  border-left: 1px solid #e7edf7;
+}
+
+.overview-panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.overview-panel-heading h2 {
+  color: #0611a8;
+  font-size: 1rem;
+}
+
+.overview-panel-heading span {
+  border-radius: 999px;
+  background: #0cab4f;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 1000;
+  padding: 0.18rem 0.5rem;
+  text-transform: uppercase;
+}
+
+.overview-panel-heading small {
+  color: #65728a;
+  font-size: 0.72rem;
+  font-weight: 1000;
+}
+
+.overview-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.overview-match {
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid #e6ebf4;
+  border-radius: 8px;
+  background: #fff;
+  color: #071126;
+  cursor: pointer;
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.overview-stage {
+  color: #0611a8;
+  font-size: 0.72rem;
+  font-weight: 1000;
+  text-transform: uppercase;
+}
+
+.overview-teams {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.overview-teams > strong {
+  color: #071126;
+  font-size: 1.45rem;
+  font-weight: 1000;
+  white-space: nowrap;
+}
+
+.overview-teams .team-badge strong {
+  font-size: 0.76rem;
+}
+
+.overview-meta {
+  display: flex;
+  justify-content: center;
+  color: #0611a8;
+  font-size: 0.82rem;
+  font-weight: 1000;
+  text-transform: uppercase;
+}
+
+.overview-meta em {
+  color: #0cab4f;
+  font-style: normal;
+}
+
+.overview-prediction {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.55rem;
+  align-items: center;
+  border-top: 1px solid #e7edf7;
+  padding-top: 0.45rem;
+}
+
+.overview-prediction span {
+  color: #0611a8;
+  font-size: 0.72rem;
+  font-weight: 1000;
+  text-transform: uppercase;
+}
+
+.overview-prediction strong,
+.overview-prediction em {
+  color: #071126;
+  font-style: normal;
+  font-weight: 1000;
+}
+
+.overview-prediction em {
+  color: #0cab4f;
+}
+
+.matches-bottom-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.match-detail-dock {
+  max-width: 64rem;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .match-stats {
@@ -1837,6 +1996,16 @@ label {
 
   .match-center-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .match-center-top,
+  .match-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-panel + .overview-panel {
+    border-top: 1px solid #e7edf7;
+    border-left: 0;
   }
 
   .prediction-history-heading,
